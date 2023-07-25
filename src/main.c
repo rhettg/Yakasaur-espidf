@@ -4,6 +4,8 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_err.h"
+#include "esp_http_client.h"
+#include "esp_crt_bundle.h"
 #include "nvs_flash.h"
 #include "freertos/event_groups.h"
 #include "local.h"
@@ -58,7 +60,44 @@ void initialise_wifi(void)
     xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, false, true, portMAX_DELAY);
 }
 
+void send_telemetry(void)
+{
+    char api_url[100];
+
+    if (0 >= snprintf(api_url, 100, "%s/v1/missions/%s/notes", YAK_GDS_URL, YAK_GDS_MISSION)) {
+        ESP_LOGE(TAG, "Failed to create API URL");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Sending telemetry");
+
+    esp_http_client_config_t config = {
+        .url = api_url,
+        .method = HTTP_METHOD_POST,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    ESP_ERROR_CHECK(esp_http_client_set_header(client, "Content-Type", "application/json"));
+
+    char *post_data = "{\"body\":{\"temp\":72.22}}";
+    esp_http_client_set_post_field(client, post_data, strlen(post_data));
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "HTTP POST request was successful");
+    } else {
+        ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
+    }
+
+    esp_http_client_cleanup(client);
+}
+
 void app_main()
 {
     initialise_wifi();
+    while(1) {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        send_telemetry();
+    }
 }
