@@ -6,8 +6,10 @@
 #include "esp_err.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "freertos/event_groups.h"
+#include "cJSON.h"
 #include "local.h"
 
 #define WIFI_CONNECTED_BIT BIT0
@@ -63,13 +65,32 @@ void initialise_wifi(void)
 void send_telemetry(void)
 {
     char api_url[100];
+    cJSON *root;
+    cJSON *body;
+
+    ESP_LOGI(TAG, "Collecting telemetry");
+	root = cJSON_CreateObject();
+    body = cJSON_CreateObject();
+
+    uint32_t seconds_since_boot = esp_timer_get_time() / 1000000;
+
+    wifi_ap_record_t ap_info;
+    esp_err_t ret = esp_wifi_sta_get_ap_info(&ap_info);
+    ESP_ERROR_CHECK(ret);
+
+    body = cJSON_AddObjectToObject(root, "body");
+    cJSON_AddNumberToObject(body, "seconds_since_boot", seconds_since_boot);
+    cJSON_AddNumberToObject(body, "wifi_rssi", ap_info.rssi);
+
+    char *post_data = cJSON_Print(root);
+    cJSON_Delete(root);
+
+    ESP_LOGI(TAG, "Sending telemetry");
 
     if (0 >= snprintf(api_url, 100, "%s/v1/missions/%s/notes", YAK_GDS_URL, YAK_GDS_MISSION)) {
         ESP_LOGE(TAG, "Failed to create API URL");
         return;
     }
-
-    ESP_LOGI(TAG, "Sending telemetry");
 
     esp_http_client_config_t config = {
         .url = api_url,
@@ -80,7 +101,6 @@ void send_telemetry(void)
     esp_http_client_handle_t client = esp_http_client_init(&config);
     ESP_ERROR_CHECK(esp_http_client_set_header(client, "Content-Type", "application/json"));
 
-    char *post_data = "{\"body\":{\"temp\":72.22}}";
     esp_http_client_set_post_field(client, post_data, strlen(post_data));
 
     esp_err_t err = esp_http_client_perform(client);
@@ -91,13 +111,14 @@ void send_telemetry(void)
     }
 
     esp_http_client_cleanup(client);
+    free(post_data);
 }
 
 void app_main()
 {
     initialise_wifi();
     while(1) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
         send_telemetry();
     }
 }
