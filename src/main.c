@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -30,8 +31,37 @@ struct telemetryValues telemetry_values;
 void cmd_fwd(int arg) {
     ESP_LOGI(TAG, "FWD %d", arg);
 
-    // TODO: adjust position using heading and ... math.
-    telemetry_values.latitude += arg / 1000000.0;
+    double d = arg / 1000000.0;  // Convert to a smaller value for demo purposes
+    double theta = telemetry_values.heading * M_PI / 180.0;  // Convert to radians
+
+    telemetry_values.latitude += d * cos(theta);
+    telemetry_values.longitude += d * sin(theta) / cos(telemetry_values.latitude * M_PI / 180.0);
+}
+
+void cmd_bck(int arg) {
+    ESP_LOGI(TAG, "BCK %d", arg);
+
+    double d = -arg / 1000000.0;  // Convert to a smaller value and make it negative for backward
+    double theta = telemetry_values.heading * M_PI / 180.0;  // Convert to radians
+
+    telemetry_values.latitude += d * cos(theta);
+    telemetry_values.longitude += d * sin(theta) / cos(telemetry_values.latitude * M_PI / 180.0);
+}
+
+void cmd_rt(double angle) {
+    ESP_LOGI(TAG, "RT %.2f", angle);
+    telemetry_values.heading += angle;
+    while (telemetry_values.heading >= 360.0) {
+        telemetry_values.heading -= 360.0;
+    }
+}
+
+void cmd_lt(double angle) {
+    ESP_LOGI(TAG, "LT %.2f", angle);
+    telemetry_values.heading -= angle;
+    while (telemetry_values.heading < 0.0) {
+        telemetry_values.heading += 360.0;
+    }
 }
 
 void cmd_ping() {
@@ -59,6 +89,24 @@ void handle_command(char *command) {
             cmd_fwd(cmd_arg);
         } else {
             cmd_fwd(0); // default argument value
+        }
+    } else if (strcmp(cmd_name, "BCK") == 0) {
+        if (num_args == 2) {
+            cmd_bck(cmd_arg);
+        } else {
+            cmd_bck(0); // default argument value
+        }
+    } else if (strcmp(cmd_name, "RT") == 0) {
+        if (num_args == 2) {
+            cmd_rt((double)cmd_arg);
+        } else {
+            ESP_LOGE(TAG, "Angle required for RT command");
+        }
+    } else if (strcmp(cmd_name, "LT") == 0) {
+        if (num_args == 2) {
+            cmd_lt((double)cmd_arg);
+        } else {
+            ESP_LOGE(TAG, "Angle required for LT command");
         }
     } else if (strcmp(cmd_name, "PING") == 0) {
         cmd_ping();
