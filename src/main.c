@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -17,6 +18,54 @@
 static const char *TAG = "DEMO";
 
 static EventGroupHandle_t wifi_event_group;
+
+struct telemetryValues {
+    double heading;
+    double latitude;
+    double longitude;
+};
+
+struct telemetryValues telemetry_values;
+
+void cmd_fwd(int arg) {
+    ESP_LOGI(TAG, "FWD %d", arg);
+
+    // TODO: adjust position using heading and ... math.
+    telemetry_values.latitude += arg / 1000000.0;
+}
+
+void cmd_ping() {
+    ESP_LOGI(TAG, "PING");
+}
+
+void handle_command(char *command) {
+    char cmd_name[50];
+    int cmd_arg;
+    int num_args;
+
+    ESP_LOGI(TAG, "Received command: %s", command);
+
+    // Parse the command
+    num_args = sscanf(command, "%s %d", cmd_name, &cmd_arg);
+
+    // convert cmd_name to uppercase
+    for (int i = 0; cmd_name[i]; i++) {
+        cmd_name[i] = toupper(cmd_name[i]);
+    }
+
+    // Switch based on command name
+    if (strcmp(cmd_name, "FWD") == 0) {
+        if (num_args == 2) {
+            cmd_fwd(cmd_arg);
+        } else {
+            cmd_fwd(0); // default argument value
+        }
+    } else if (strcmp(cmd_name, "PING") == 0) {
+        cmd_ping();
+    } else {
+        ESP_LOGE(TAG, "Unknown command %s", cmd_name);
+    }
+}
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
@@ -70,7 +119,6 @@ void send_telemetry(void)
 
     ESP_LOGI(TAG, "Collecting telemetry");
 	root = cJSON_CreateObject();
-    body = cJSON_CreateObject();
 
     uint32_t seconds_since_boot = esp_timer_get_time() / 1000000;
 
@@ -82,12 +130,19 @@ void send_telemetry(void)
     cJSON_AddNumberToObject(body, "seconds_since_boot", seconds_since_boot);
     cJSON_AddNumberToObject(body, "wifi_rssi", ap_info.rssi);
 
+    cJSON_AddNumberToObject(body, "heading", telemetry_values.heading);
+
+    cJSON *location;
+    location = cJSON_AddObjectToObject(body, "location");
+    cJSON_AddNumberToObject(location, "latitude", telemetry_values.latitude);
+    cJSON_AddNumberToObject(location, "longitude", telemetry_values.longitude);
+
     char *post_data = cJSON_Print(root);
     cJSON_Delete(root);
 
     ESP_LOGI(TAG, "Sending telemetry");
 
-    if (0 >= snprintf(api_url, 100, "%s/v1/missions/%s/notes", YAK_GDS_URL, YAK_GDS_MISSION)) {
+    if (0 >= snprintf(api_url, 100, "%s/v1/missions/%s/notes/telemetry.qo", YAK_GDS_URL, YAK_GDS_MISSION)) {
         ESP_LOGE(TAG, "Failed to create API URL");
         return;
     }
@@ -108,8 +163,16 @@ void send_telemetry(void)
         ESP_LOGI(TAG, "HTTP POST request was successful");
     } else {
         ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
+        goto cleanup;
     }
 
+    int status_code = esp_http_client_get_status_code(client);
+    if (status_code != 201) {
+        ESP_LOGE(TAG, "HTTP POST request returned status code %d", status_code);
+        goto cleanup;
+    }
+
+cleanup:
     esp_http_client_cleanup(client);
     free(post_data);
 }
@@ -226,7 +289,7 @@ void get_commands() {
         cJSON* note = cJSON_GetArrayItem(commands, i);
         cJSON* body = cJSON_GetObjectItem(note, "body");
         char* command = cJSON_GetObjectItem(body, "command")->valuestring;
-        ESP_LOGI(TAG, "Received command: %s", command);
+        handle_command(command);
         }
     }
 
@@ -237,6 +300,10 @@ void get_commands() {
 
 void app_main()
 {
+    telemetry_values.heading = 0;
+    telemetry_values.latitude = 47.816944;
+    telemetry_values.longitude = -119.656111;
+
     initialise_wifi();
     while(1) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
