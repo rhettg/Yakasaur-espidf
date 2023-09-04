@@ -89,6 +89,19 @@ void cmd_ping() {
     ESP_LOGI(TAG, "PING");
 }
 
+void cmd_snap() {
+    ESP_LOGI(TAG, "SNAP");
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (!fb) {
+        ESP_LOGE(TAG, "failed to grab framebuffs");
+        return;
+    }
+
+    // use fb->buf to access the image
+    ESP_LOGI(TAG, "Picture taken! Its size was: %zu bytes", fb->len);
+    esp_camera_fb_return(fb);
+}
+
 void handle_command(char *command) {
     char cmd_name[50];
     int cmd_arg;
@@ -131,6 +144,8 @@ void handle_command(char *command) {
         }
     } else if (strcmp(cmd_name, "PING") == 0) {
         cmd_ping();
+    } else if (strcmp(cmd_name, "SNAP") == 0) {
+        cmd_snap();
     } else {
         ESP_LOGE(TAG, "Unknown command %s", cmd_name);
     }
