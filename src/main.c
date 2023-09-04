@@ -9,12 +9,33 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_timer.h"
+#include "esp_camera.h"
 #include "nvs_flash.h"
 #include "freertos/event_groups.h"
 #include "cJSON.h"
 #include "local.h"
 
 #define WIFI_CONNECTED_BIT BIT0
+
+// Camera pins taken from CAMERA_MODEL_ESP32S3_EYE (https://github.com/Freenove/Freenove_Ultimate_Starter_Kit_for_ESP32/blob/7ada879b6dd7bae30ed03800d9c8ca2693590aaa/C/Sketches/Sketch_34.1_CameraWebServer/camera_pins.h#L251-L269)
+#define PWDN_GPIO_NUM -1
+#define RESET_GPIO_NUM -1
+#define XCLK_GPIO_NUM 15
+#define SIOD_GPIO_NUM 4
+#define SIOC_GPIO_NUM 5
+
+#define Y2_GPIO_NUM 11
+#define Y3_GPIO_NUM 9
+#define Y4_GPIO_NUM 8
+#define Y5_GPIO_NUM 10
+#define Y6_GPIO_NUM 12
+#define Y7_GPIO_NUM 18
+#define Y8_GPIO_NUM 17
+#define Y9_GPIO_NUM 16
+
+#define VSYNC_GPIO_NUM 6
+#define HREF_GPIO_NUM 7
+#define PCLK_GPIO_NUM 13
 
 static const char *TAG = "DEMO";
 
@@ -346,6 +367,56 @@ void get_commands() {
   esp_http_client_cleanup(client);
 }
 
+static camera_config_t camera_config = {
+    .pin_pwdn  = PWDN_GPIO_NUM,
+    .pin_reset = RESET_GPIO_NUM,
+    .pin_xclk = XCLK_GPIO_NUM,
+    .pin_sccb_sda = SIOD_GPIO_NUM,
+    .pin_sccb_scl = SIOC_GPIO_NUM,
+
+    .pin_d7 = Y9_GPIO_NUM,
+    .pin_d6 = Y8_GPIO_NUM,
+    .pin_d5 = Y7_GPIO_NUM,
+    .pin_d4 = Y6_GPIO_NUM,
+    .pin_d3 = Y5_GPIO_NUM,
+    .pin_d2 = Y4_GPIO_NUM,
+    .pin_d1 = Y3_GPIO_NUM,
+    .pin_d0 = Y2_GPIO_NUM,
+    .pin_vsync = VSYNC_GPIO_NUM,
+    .pin_href = HREF_GPIO_NUM,
+    .pin_pclk = PCLK_GPIO_NUM,
+
+    .xclk_freq_hz = 20000000,//EXPERIMENTAL: Set to 16MHz on ESP32-S2 or ESP32-S3 to enable EDMA mode
+    .ledc_timer = LEDC_TIMER_0,
+    .ledc_channel = LEDC_CHANNEL_0,
+
+    .pixel_format = PIXFORMAT_JPEG,//YUV422,GRAYSCALE,RGB565,JPEG
+    .frame_size = FRAMESIZE_UXGA,//QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
+
+    .jpeg_quality = 12, //0-63, for OV series camera sensors, lower number means higher quality
+    .fb_count = 1, //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
+    .grab_mode = CAMERA_GRAB_WHEN_EMPTY//CAMERA_GRAB_LATEST. Sets when buffers should be filled
+};
+
+void camera_init(){
+    //power up the camera if PWDN pin is defined
+    if(PWDN_GPIO_NUM != -1){
+        ESP_ERROR_CHECK(gpio_set_direction(PWDN_GPIO_NUM, GPIO_MODE_OUTPUT));
+        //pinMode(PWDN_GPIO_NUM, OUTPUT);
+        ESP_ERROR_CHECK(gpio_set_level(PWDN_GPIO_NUM, 0));
+        //digitalWrite(PWDN_GPIO_NUM, LOW);
+    }
+
+    //initialize the camera
+    esp_err_t err = esp_camera_init(&camera_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Camera Init Failed");
+        return;
+    }
+
+    return;
+}
+
 void app_main()
 {
     telemetry_values.heading = 0;
@@ -353,6 +424,7 @@ void app_main()
     telemetry_values.longitude = -119.656111;
 
     initialise_wifi();
+    camera_init();
     while(1) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
         send_telemetry();
