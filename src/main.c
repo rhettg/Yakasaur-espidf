@@ -403,9 +403,7 @@ void camera_init(){
     //power up the camera if PWDN pin is defined
     if(PWDN_GPIO_NUM != -1){
         ESP_ERROR_CHECK(gpio_set_direction(PWDN_GPIO_NUM, GPIO_MODE_OUTPUT));
-        //pinMode(PWDN_GPIO_NUM, OUTPUT);
         ESP_ERROR_CHECK(gpio_set_level(PWDN_GPIO_NUM, 0));
-        //digitalWrite(PWDN_GPIO_NUM, LOW);
     }
 
     //initialize the camera
