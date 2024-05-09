@@ -15,6 +15,7 @@
 #include "cJSON.h"
 #include "mbedtls/base64.h"
 #include "local.h"
+#include "motor.h"
 
 #define WIFI_CONNECTED_BIT BIT0
 
@@ -50,6 +51,16 @@ struct telemetryValues {
 
 struct telemetryValues telemetry_values;
 
+extern const char isrg_root_pem_start[] asm("_binary_isrg_root_pem_start");
+extern const char isrg_root_pem_end[]   asm("_binary_isrg_root_pem_end");
+
+void cmd_fwd(int arg) {
+    ESP_LOGI(TAG, "FWD %d", arg);
+
+    motor_forward(1, arg);
+}
+
+/*
 void cmd_fwd(int arg) {
     ESP_LOGI(TAG, "FWD %d", arg);
 
@@ -59,31 +70,45 @@ void cmd_fwd(int arg) {
     telemetry_values.latitude += d * cos(theta);
     telemetry_values.longitude += d * sin(theta) / cos(telemetry_values.latitude * M_PI / 180.0);
 }
+*/
 
 void cmd_bck(int arg) {
     ESP_LOGI(TAG, "BCK %d", arg);
 
+    motor_backward(1, arg);
+
+    /*
     double d = -arg / 1000000.0;  // Convert to a smaller value and make it negative for backward
     double theta = telemetry_values.heading * M_PI / 180.0;  // Convert to radians
 
     telemetry_values.latitude += d * cos(theta);
     telemetry_values.longitude += d * sin(theta) / cos(telemetry_values.latitude * M_PI / 180.0);
+    */
 }
 
 void cmd_rt(double angle) {
     ESP_LOGI(TAG, "RT %.2f", angle);
+
+    motor_right(angle);
+
+    /*
     telemetry_values.heading += angle;
     while (telemetry_values.heading >= 360.0) {
         telemetry_values.heading -= 360.0;
     }
+    */
 }
 
 void cmd_lt(double angle) {
     ESP_LOGI(TAG, "LT %.2f", angle);
+
+    motor_left(angle);
+    /*
     telemetry_values.heading -= angle;
     while (telemetry_values.heading < 0.0) {
         telemetry_values.heading += 360.0;
     }
+    */
 }
 
 void cmd_ping() {
@@ -137,6 +162,7 @@ esp_err_t send_image(const char *filename, char *base64_data) {
         .url = api_url,
         .method = HTTP_METHOD_POST,
         .crt_bundle_attach = esp_crt_bundle_attach,
+        .cert_pem = isrg_root_pem_start
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -344,7 +370,7 @@ void send_telemetry(void)
     esp_http_client_config_t config = {
         .url = api_url,
         .method = HTTP_METHOD_POST,
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .cert_pem = isrg_root_pem_start
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
