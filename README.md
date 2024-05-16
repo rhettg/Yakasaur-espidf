@@ -12,7 +12,7 @@ with other boards.
 ## Highlights
 
 1. **Work in Progress**: This repository is currently a demo and might be a bit unorganized. It's actively being developed, so expect frequent changes.
-2. **PlatformIO Integration**: The project utilizes PlatformIO for its development. However, it's currently configured to support only a single board.
+2. **ESP-IDF**: The project is built using esp-idf and includes a devcontainer for a build environment.
 3. **Configuration**: All secrets and configurations are sourced from `local.h`. This file is mandatory for the project to function correctly. A template named `local.h.sample` is provided to help you set up your own `local.h` file. Ensure you never commit the `local.h` file to the repository.
 4. **Yak GDS Integration**: This demo assumes that Yakasaur will connect to an API server named Yak GDS. You can find the repository for Yak GDS [here](https://github.com/rhettg/yakgds).
 5. **Related Repositories and Resources**:
@@ -24,11 +24,6 @@ with other boards.
 
 ## How to Use
 
-0. **PlatformIO Setup**:
-   - Ensure you have [PlatformIO installed](https://docs.platformio.org/en/latest/integration/ide/vscode.html#ide-vscode)
-   - Open the project in your PlatformIO environment.
-   - Build and upload the project to your board.
-
 1. **Clone the Repository**:
    ```bash
    git clone --recursive https://github.com/rhettg/Yakasaur-espidf.git
@@ -37,19 +32,22 @@ with other boards.
 This should likely go into your platform.io folder, which for me is `~/Documents/PlatformIO/Projects/`
 Use `--recursive` to ensure the submodules (`esp32-camera`) are cloned as well.
 
-2. **Setup Configuration**:
+2. Build and Open in Devcontainer
+
+3. **Setup Configuration**:
    - Copy the `local.h.sample` file to `local.h`.
    - Fill in the required details such as wifi and api endpoints.
 
-3. **Integration with Yak GDS**:
+4. **Integration with Yak GDS**:
    - Ensure the Yak GDS server is running and accessible.
    - The Yakasaur will attempt to connect to the Yak GDS server using the URL provided in the `local.h` file.
 
-4. **Build and Upload Image**
-   - Using the PlatformIO integrations, upload the image to your board.
+5. **Build and Upload Image**
+   - Use `idf.py build` to create firmware.
+   - Flash your device.
    - Use the Serial Monitor to view the output of the program.
 
-5. **Control Yakasaur Remotely**:
+6. **Control Yakasaur Remotely**:
    - Using Yak GDS, send commands to your "Rover".
 
 
