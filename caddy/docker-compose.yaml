@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  caddy:
+    build: .
+    ports:
+      - "3099:3099"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile

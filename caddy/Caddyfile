@@ -1,0 +1,8 @@
+# Define the HTTP server block to listen on any IP address
+:3099 {
+    # Reverse proxy to the HTTPS backend
+    reverse_proxy https://yakgds.taildefad.ts.net {
+        # Set the Host header to match the target server
+        header_up Host yakgds.taildefad.ts.net
+    }
+}
