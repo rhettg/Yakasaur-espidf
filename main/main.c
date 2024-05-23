@@ -39,7 +39,7 @@
 #define HREF_GPIO_NUM 7
 #define PCLK_GPIO_NUM 13
 
-static const char *TAG = "DEMO";
+static const char *TAG = "YAK";
 
 static EventGroupHandle_t wifi_event_group;
 
@@ -162,7 +162,6 @@ esp_err_t send_image(const char *filename, char *base64_data) {
         .url = api_url,
         .method = HTTP_METHOD_POST,
         .crt_bundle_attach = esp_crt_bundle_attach,
-        .cert_pem = isrg_root_pem_start
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -370,7 +369,6 @@ void send_telemetry(void)
     esp_http_client_config_t config = {
         .url = api_url,
         .method = HTTP_METHOD_POST,
-        .cert_pem = isrg_root_pem_start
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -575,6 +573,7 @@ void app_main()
 
     initialise_wifi();
     camera_init();
+    motor_init();
     while(1) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
         send_telemetry();
