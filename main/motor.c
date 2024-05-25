@@ -46,7 +46,12 @@ void motor_stop() {
     gpio_set_level(MOTOR_PIN_M4_EN, 0);
 }
 
-void motor_forward(int speed, int time) {
+int value_to_time(int value) {
+    // This calibrated so that a value of 100 takes the rover about 10cm at full power.
+    return value * 16.66667;
+}
+
+void motor_forward(int speed, int distance) {
     _motor_a_set_direction(1);
     _motor_b_set_direction(1);
 
@@ -55,12 +60,13 @@ void motor_forward(int speed, int time) {
     gpio_set_level(MOTOR_PIN_M2_EN, 1);
     gpio_set_level(MOTOR_PIN_M4_EN, 1);
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    int delay = value_to_time(distance);
+    vTaskDelay(delay / portTICK_PERIOD_MS);
 
     motor_stop();
 }
 
-void motor_backward(int speed, int time) {
+void motor_backward(int speed, int distance) {
     _motor_a_set_direction(-1);
     _motor_b_set_direction(-1);
 
@@ -69,7 +75,8 @@ void motor_backward(int speed, int time) {
     gpio_set_level(MOTOR_PIN_M2_EN, 1);
     gpio_set_level(MOTOR_PIN_M4_EN, 1);
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    int delay = value_to_time(distance);
+    vTaskDelay(delay / portTICK_PERIOD_MS);
 
     motor_stop();
 }
