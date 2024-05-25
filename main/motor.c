@@ -81,6 +81,11 @@ void motor_backward(int speed, int distance) {
     motor_stop();
 }
 
+int angle_to_time(double angle) {
+    // This calibrated so that a value of 90 takes the rover a quarter turn.
+    return angle * 26;
+}
+
 void motor_left(double angle) {
     _motor_a_set_direction(-1);
     _motor_b_set_direction(1);
@@ -90,7 +95,9 @@ void motor_left(double angle) {
     gpio_set_level(MOTOR_PIN_M2_EN, 1);
     gpio_set_level(MOTOR_PIN_M4_EN, 1);
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    int delay = angle_to_time(angle);
+
+    vTaskDelay(delay / portTICK_PERIOD_MS);
 
     motor_stop();
 }
@@ -104,7 +111,8 @@ void motor_right(double angle) {
     gpio_set_level(MOTOR_PIN_M2_EN, 1);
     gpio_set_level(MOTOR_PIN_M4_EN, 1);
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    int delay = angle_to_time(angle);
+    vTaskDelay(delay / portTICK_PERIOD_MS);
 
     motor_stop();
 }
