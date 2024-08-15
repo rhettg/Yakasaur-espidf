@@ -440,6 +440,7 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
                 if (copy_len) {
                     memcpy(evt->user_data + output_len, evt->data, copy_len);
                 }
+                output_len += copy_len;
             }
 
             break;
