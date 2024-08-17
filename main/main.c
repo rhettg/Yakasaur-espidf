@@ -10,6 +10,8 @@
 #include "esp_crt_bundle.h"
 #include "esp_timer.h"
 #include "esp_camera.h"
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
 #include "nvs_flash.h"
 #include "freertos/event_groups.h"
 #include "cJSON.h"
@@ -39,6 +41,11 @@
 #define HREF_GPIO_NUM 7
 #define PCLK_GPIO_NUM 13
 
+#define ADC_CHANNEL     ADC_CHANNEL_3
+#define ADC_WIDTH       ADC_BITWIDTH_12
+#define ADC_ATTEN       ADC_ATTEN_DB_2_5
+#define SAMPLES         16
+
 static const char *TAG = "YAK";
 
 static EventGroupHandle_t wifi_event_group;
@@ -53,6 +60,9 @@ struct telemetryValues telemetry_values;
 
 extern const char isrg_root_pem_start[] asm("_binary_isrg_root_pem_start");
 extern const char isrg_root_pem_end[]   asm("_binary_isrg_root_pem_end");
+
+static adc_cali_handle_t adc_cali_handle = NULL;
+static adc_oneshot_unit_handle_t adc_handle = NULL;
 
 void cmd_fwd(int arg) {
     ESP_LOGI(TAG, "FWD %d", arg);
@@ -338,6 +348,44 @@ void initialise_wifi(void)
     xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, false, true, portMAX_DELAY);
 }
 
+void init_adc() {
+    adc_oneshot_unit_init_cfg_t init_config = {
+        .unit_id = ADC_UNIT_2,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config, &adc_handle));
+
+    adc_oneshot_chan_cfg_t channel_config = {
+        .bitwidth = ADC_WIDTH,
+        .atten = ADC_ATTEN,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc_handle, ADC_CHANNEL, &channel_config));
+
+    adc_cali_curve_fitting_config_t cali_config = {
+        .unit_id = ADC_UNIT_2,
+        .atten = ADC_ATTEN,
+        .bitwidth = ADC_WIDTH,
+    };
+    ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config, &adc_cali_handle));
+}
+
+float read_voltage() {
+    int32_t adc_reading = 0;
+    for (int i = 0; i < SAMPLES; i++) {
+        int raw;
+        ESP_ERROR_CHECK(adc_oneshot_read(adc_handle, ADC_CHANNEL, &raw));
+        adc_reading += raw;
+    }
+    adc_reading /= SAMPLES;
+
+    int voltage;
+    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc_cali_handle, adc_reading, &voltage));
+    float scaled_voltage = (voltage * 6.0) / 0.5;
+    scaled_voltage /= 1.08;
+
+    return scaled_voltage;
+}
+
 void send_telemetry(void)
 {
     char api_url[100];
@@ -356,6 +404,9 @@ void send_telemetry(void)
     body = cJSON_AddObjectToObject(root, "body");
     cJSON_AddNumberToObject(body, "seconds_since_boot", seconds_since_boot);
     cJSON_AddNumberToObject(body, "wifi_rssi", ap_info.rssi);
+
+    float voltage = read_voltage();
+    cJSON_AddNumberToObject(body, "voltage", voltage);
 
     cJSON_AddNumberToObject(body, "heading", telemetry_values.heading);
 
@@ -582,6 +633,7 @@ void app_main()
 
     initialise_wifi();
     camera_init();
+    init_adc();
     motor_init();
     while(1) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
