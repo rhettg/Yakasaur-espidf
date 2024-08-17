@@ -203,6 +203,14 @@ void cmd_snap() {
         ESP_LOGE(TAG, "failed to grab framebuffs");
         return;
     }
+    // Return this so we can get a fresh frame
+    esp_camera_fb_return(fb);
+
+    fb = esp_camera_fb_get();
+    if (!fb) {
+        ESP_LOGE(TAG, "failed to grab framebuffs");
+        return;
+    }
 
     // use fb->buf to access the image
     ESP_LOGI(TAG, "Picture taken! Its size was: %zu bytes", fb->len);
@@ -543,10 +551,10 @@ static camera_config_t camera_config = {
     .pixel_format = PIXFORMAT_JPEG,//YUV422,GRAYSCALE,RGB565,JPEG
     .frame_size = FRAMESIZE_QVGA,//QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
 
-    .jpeg_quality = 50, //0-63, for OV series camera sensors, lower number means higher quality
+    .jpeg_quality = 20, //0-63, for OV series camera sensors, lower number means higher quality
     .fb_count = 1, //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
     .fb_location = CAMERA_FB_IN_PSRAM, //Choose the location of frame buffer
-    .grab_mode = CAMERA_GRAB_LATEST
+    .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
 };
 
 void camera_init(){
