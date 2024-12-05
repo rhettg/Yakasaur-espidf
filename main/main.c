@@ -18,6 +18,7 @@
 #include "mbedtls/base64.h"
 #include "local.h"
 #include "motor.h"
+#include "yak_api.h"
 
 #define WIFI_CONNECTED_BIT BIT0
 
@@ -625,6 +626,37 @@ void camera_init(){
     return;
 }
 
+void send_telemetry_stream(void) {
+    cJSON *root = cJSON_CreateObject();
+    
+    // Add telemetry data
+    uint32_t seconds_since_boot = esp_timer_get_time() / 1000000;
+    cJSON_AddNumberToObject(root, "seconds_since_boot", seconds_since_boot);
+    
+    wifi_ap_record_t ap_info;
+    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        cJSON_AddNumberToObject(root, "wifi_rssi", ap_info.rssi);
+    }
+
+    float voltage = read_voltage();
+    cJSON_AddNumberToObject(root, "voltage", voltage);
+    
+    // Add heading
+    cJSON_AddNumberToObject(root, "heading", telemetry_values.heading);
+
+    // Add latitude and longitude directly to root
+    cJSON_AddNumberToObject(root, "latitude", telemetry_values.latitude);
+    cJSON_AddNumberToObject(root, "longitude", telemetry_values.longitude);
+
+    // Publish to stream
+    esp_err_t err = yak_api_publish("telemetry", root);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to publish telemetry: %s", esp_err_to_name(err));
+    }
+
+    cJSON_Delete(root);
+}
+
 void app_main()
 {
     telemetry_values.heading = 0;
@@ -637,7 +669,7 @@ void app_main()
     motor_init();
     while(1) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
-        send_telemetry();
-        get_commands();
+        send_telemetry_stream();
+        // get_commands() commented out for now
     }
 }
