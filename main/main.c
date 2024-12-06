@@ -667,9 +667,25 @@ void app_main()
     camera_init();
     init_adc();
     motor_init();
+    yak_api_init();
+    
+    // Create stream subscriptions
+    xTaskCreate(yak_api_subscription_task, "motor_a", 4096, "motor_a", 5, NULL);
+    xTaskCreate(yak_api_subscription_task, "motor_b", 4096, "motor_b", 5, NULL);
+
     while(1) {
-        vTaskDelay(10000 / portTICK_PERIOD_MS);
+        yak_stream_message_t msg;
+        if (xQueueReceive(yak_api_get_queue(), &msg, pdMS_TO_TICKS(10000)) == pdTRUE) {
+            ESP_LOGI(TAG, "Received message from stream %s: %s", msg.stream_name, msg.data);
+            
+            // Parse and handle command
+            if (strcmp(msg.stream_name, "motor_a") == 0 || strcmp(msg.stream_name, "motor_b") == 0) {
+                //handle_command(msg.data);
+            }
+            
+            free(msg.data);
+        }
+        
         send_telemetry_stream();
-        // get_commands() commented out for now
     }
 }

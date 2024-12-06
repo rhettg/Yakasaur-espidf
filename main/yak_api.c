@@ -61,3 +61,98 @@ esp_err_t yak_api_publish(const char *stream_name, cJSON *event) {
 
     return ret;
 }
+
+static QueueHandle_t stream_queue;
+#define STREAM_QUEUE_SIZE 10
+static esp_err_t stream_event_handler(esp_http_client_event_t *evt);
+
+void yak_api_subscription_task(void *pvParameters) {
+    char *stream_name = (char *)pvParameters;
+    char url[256];
+    char buffer[512];
+    
+    snprintf(url, sizeof(url), "%s/v1/stream/%s", YAK_API_BASE_URL, stream_name);
+    
+    while (1) {
+        esp_http_client_config_t config = {
+            .url = url,
+            .method = HTTP_METHOD_GET,
+            .timeout_ms = 60000,
+            .user_data = stream_name
+        };
+
+        esp_http_client_handle_t client = esp_http_client_init(&config);
+        if (client != NULL) {
+            ESP_LOGI(TAG, "Starting subscription to %s", stream_name);
+            
+            if (esp_http_client_open(client, 0) == ESP_OK) {
+                esp_http_client_fetch_headers(client);
+                
+                int read_len;
+                while ((read_len = esp_http_client_read(client, buffer, sizeof(buffer)-1)) > 0) {
+                    ESP_LOGI(TAG, "Read %d", read_len);
+                    buffer[read_len] = 0;
+                    yak_stream_message_t msg;
+                    strncpy(msg.stream_name, stream_name, sizeof(msg.stream_name)-1);
+                    msg.data = strdup(buffer);
+                    if (msg.data) {
+                        ESP_LOGI(TAG, "adding to queue %s", stream_name);
+                        xQueueSend(stream_queue, &msg, 0);
+                    }
+                }
+            }
+
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+}
+
+static char stream_buffer[1024];
+static size_t buffer_len = 0;
+
+static esp_err_t stream_event_handler(esp_http_client_event_t *evt) {
+    switch(evt->event_id) {
+        case HTTP_EVENT_ON_DATA:
+            memcpy(stream_buffer + buffer_len, evt->data, evt->data_len);
+            buffer_len += evt->data_len;
+            
+            if (evt->data_len > 0 && ((char *)evt->data)[evt->data_len-1] == '\n') {
+                // We have a complete message
+                stream_buffer[buffer_len] = '\0';
+                
+                yak_stream_message_t msg;
+                strncpy(msg.stream_name, evt->user_data, sizeof(msg.stream_name)-1);
+                msg.data = strdup(stream_buffer); // Allocate memory for the message data
+                
+                if (msg.data) {
+                    xQueueSend(stream_queue, &msg, 0);
+                }
+                
+                buffer_len = 0;
+            }
+            break;
+            
+        case HTTP_EVENT_DISCONNECTED:
+            ESP_LOGI(TAG, "Stream disconnected");
+            buffer_len = 0;
+            break;
+        default:
+            break;
+    }
+    return ESP_OK;
+}
+
+esp_err_t yak_api_init(void) {
+    stream_queue = xQueueCreate(STREAM_QUEUE_SIZE, sizeof(yak_stream_message_t));
+    if (stream_queue == NULL) {
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+QueueHandle_t yak_api_get_queue(void) {
+    return stream_queue;
+}
