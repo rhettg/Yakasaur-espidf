@@ -69,7 +69,6 @@ static esp_err_t stream_event_handler(esp_http_client_event_t *evt);
 void yak_api_subscription_task(void *pvParameters) {
     char *stream_name = (char *)pvParameters;
     char url[256];
-    char buffer[512];
     
     snprintf(url, sizeof(url), "%s/v1/stream/%s", YAK_API_BASE_URL, stream_name);
     
@@ -78,31 +77,28 @@ void yak_api_subscription_task(void *pvParameters) {
             .url = url,
             .method = HTTP_METHOD_GET,
             .timeout_ms = 60000,
-            .user_data = stream_name
+            .event_handler = stream_event_handler,
+            .user_data = stream_name,
         };
 
         esp_http_client_handle_t client = esp_http_client_init(&config);
         if (client != NULL) {
             ESP_LOGI(TAG, "Starting subscription to %s", stream_name);
             
-            if (esp_http_client_open(client, 0) == ESP_OK) {
-                esp_http_client_fetch_headers(client);
-                
-                int read_len;
-                while ((read_len = esp_http_client_read(client, buffer, sizeof(buffer)-1)) > 0) {
-                    ESP_LOGI(TAG, "Read %d", read_len);
-                    buffer[read_len] = 0;
-                    yak_stream_message_t msg;
-                    strncpy(msg.stream_name, stream_name, sizeof(msg.stream_name)-1);
-                    msg.data = strdup(buffer);
-                    if (msg.data) {
-                        ESP_LOGI(TAG, "adding to queue %s", stream_name);
-                        xQueueSend(stream_queue, &msg, 0);
-                    }
+            while (1) {
+                esp_err_t err = esp_http_client_perform(client);
+                if (err == ESP_OK) {
+                    break;
                 }
-            }
 
-            esp_http_client_close(client);
+                if (err == ESP_ERR_HTTP_EAGAIN) {
+                    continue;
+                }
+
+                ESP_LOGE(TAG, "Stream connection failed: %s", esp_err_to_name(err));
+                break;
+            }
+                
             esp_http_client_cleanup(client);
         }
         
@@ -115,12 +111,17 @@ static size_t buffer_len = 0;
 
 static esp_err_t stream_event_handler(esp_http_client_event_t *evt) {
     switch(evt->event_id) {
+        case HTTP_EVENT_ON_CONNECTED:
+            ESP_LOGD(TAG, "Stream connected");
+            break;
         case HTTP_EVENT_ON_DATA:
+            ESP_LOGD(TAG, "Stream data");
+
             memcpy(stream_buffer + buffer_len, evt->data, evt->data_len);
             buffer_len += evt->data_len;
             
+            // Do we have a complete message, or should we wait until next time?
             if (evt->data_len > 0 && ((char *)evt->data)[evt->data_len-1] == '\n') {
-                // We have a complete message
                 stream_buffer[buffer_len] = '\0';
                 
                 yak_stream_message_t msg;

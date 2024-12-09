@@ -14,10 +14,7 @@
 #define MOTOR_M_PIN_SEL ((1ULL << MOTOR_PIN_M1_EN) | (1ULL << MOTOR_PIN_M2_EN) | (1ULL << MOTOR_PIN_M3_EN) | (1ULL << MOTOR_PIN_M4_EN))
 
 void motor_init();
-void motor_stop();
-void motor_forward(int speed, int time);
-void motor_backward(int speed, int time);
-void motor_left(double degrees);
-void motor_right(double degrees);
+void motor_a_set_power(int power);
+void motor_b_set_power(int power);
 
 #endif

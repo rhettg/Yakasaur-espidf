@@ -39,80 +39,24 @@ void _motor_b_set_direction(int direction) {
     }
 }
 
-void motor_stop() {
-    gpio_set_level(MOTOR_PIN_M1_EN, 0);
-    gpio_set_level(MOTOR_PIN_M3_EN, 0);
-    gpio_set_level(MOTOR_PIN_M2_EN, 0);
-    gpio_set_level(MOTOR_PIN_M4_EN, 0);
+void motor_a_set_power(int power) {
+    _motor_a_set_direction(power);
+    if (power == 0) {
+        gpio_set_level(MOTOR_PIN_M1_EN, 0);
+        gpio_set_level(MOTOR_PIN_M3_EN, 0);
+    } else {
+        gpio_set_level(MOTOR_PIN_M1_EN, 1);
+        gpio_set_level(MOTOR_PIN_M3_EN, 1);
+    }
 }
 
-int value_to_time(int value) {
-    // This calibrated so that a value of 100 takes the rover about 10cm at full power.
-    return value * 16.66667;
-}
-
-void motor_forward(int speed, int distance) {
-    _motor_a_set_direction(1);
-    _motor_b_set_direction(1);
-
-    gpio_set_level(MOTOR_PIN_M1_EN, 1);
-    gpio_set_level(MOTOR_PIN_M3_EN, 1);
-    gpio_set_level(MOTOR_PIN_M2_EN, 1);
-    gpio_set_level(MOTOR_PIN_M4_EN, 1);
-
-    int delay = value_to_time(distance);
-    vTaskDelay(delay / portTICK_PERIOD_MS);
-
-    motor_stop();
-}
-
-void motor_backward(int speed, int distance) {
-    _motor_a_set_direction(-1);
-    _motor_b_set_direction(-1);
-
-    gpio_set_level(MOTOR_PIN_M1_EN, 1);
-    gpio_set_level(MOTOR_PIN_M3_EN, 1);
-    gpio_set_level(MOTOR_PIN_M2_EN, 1);
-    gpio_set_level(MOTOR_PIN_M4_EN, 1);
-
-    int delay = value_to_time(distance);
-    vTaskDelay(delay / portTICK_PERIOD_MS);
-
-    motor_stop();
-}
-
-int angle_to_time(double angle) {
-    // This calibrated so that a value of 90 takes the rover a quarter turn.
-    return angle * 26;
-}
-
-void motor_left(double angle) {
-    _motor_a_set_direction(-1);
-    _motor_b_set_direction(1);
-
-    gpio_set_level(MOTOR_PIN_M1_EN, 1);
-    gpio_set_level(MOTOR_PIN_M3_EN, 1);
-    gpio_set_level(MOTOR_PIN_M2_EN, 1);
-    gpio_set_level(MOTOR_PIN_M4_EN, 1);
-
-    int delay = angle_to_time(angle);
-
-    vTaskDelay(delay / portTICK_PERIOD_MS);
-
-    motor_stop();
-}
-
-void motor_right(double angle) {
-    _motor_a_set_direction(1);
-    _motor_b_set_direction(-1);
-
-    gpio_set_level(MOTOR_PIN_M1_EN, 1);
-    gpio_set_level(MOTOR_PIN_M3_EN, 1);
-    gpio_set_level(MOTOR_PIN_M2_EN, 1);
-    gpio_set_level(MOTOR_PIN_M4_EN, 1);
-
-    int delay = angle_to_time(angle);
-    vTaskDelay(delay / portTICK_PERIOD_MS);
-
-    motor_stop();
+void motor_b_set_power(int power) {
+    _motor_b_set_direction(power);
+    if (power == 0) {
+        gpio_set_level(MOTOR_PIN_M2_EN, 0);
+        gpio_set_level(MOTOR_PIN_M4_EN, 0);
+    } else {
+        gpio_set_level(MOTOR_PIN_M2_EN, 1);
+        gpio_set_level(MOTOR_PIN_M4_EN, 1);
+    }
 }
