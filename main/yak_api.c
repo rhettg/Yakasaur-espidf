@@ -65,6 +65,12 @@ esp_err_t yak_api_publish(const char *stream_name, cJSON *event) {
 static QueueHandle_t stream_queue;
 #define STREAM_QUEUE_SIZE 10
 static esp_err_t stream_event_handler(esp_http_client_event_t *evt);
+typedef struct {
+    char stream_name[32];
+    char buffer[1024];
+    size_t buffer_len;
+} stream_context_t;
+
 
 void yak_api_subscription_task(void *pvParameters) {
     char *stream_name = (char *)pvParameters;
@@ -73,12 +79,16 @@ void yak_api_subscription_task(void *pvParameters) {
     snprintf(url, sizeof(url), "%s/v1/stream/%s", YAK_API_BASE_URL, stream_name);
     
     while (1) {
+        stream_context_t *context = malloc(sizeof(stream_context_t));
+        context->buffer_len = 0;
+        strncpy(context->stream_name, stream_name, sizeof(context->stream_name)-1);
+
         esp_http_client_config_t config = {
             .url = url,
             .method = HTTP_METHOD_GET,
             .timeout_ms = 60000,
             .event_handler = stream_event_handler,
-            .user_data = stream_name,
+            .user_data = context,
         };
 
         esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -106,10 +116,9 @@ void yak_api_subscription_task(void *pvParameters) {
     }
 }
 
-static char stream_buffer[1024];
-static size_t buffer_len = 0;
-
 static esp_err_t stream_event_handler(esp_http_client_event_t *evt) {
+    stream_context_t *context = (stream_context_t *)evt->user_data;
+    
     switch(evt->event_id) {
         case HTTP_EVENT_ON_CONNECTED:
             ESP_LOGD(TAG, "Stream connected");
@@ -117,28 +126,28 @@ static esp_err_t stream_event_handler(esp_http_client_event_t *evt) {
         case HTTP_EVENT_ON_DATA:
             ESP_LOGD(TAG, "Stream data");
 
-            memcpy(stream_buffer + buffer_len, evt->data, evt->data_len);
-            buffer_len += evt->data_len;
+            memcpy(context->buffer + context->buffer_len, evt->data, evt->data_len);
+            context->buffer_len += evt->data_len;
             
             // Do we have a complete message, or should we wait until next time?
             if (evt->data_len > 0 && ((char *)evt->data)[evt->data_len-1] == '\n') {
-                stream_buffer[buffer_len] = '\0';
+                context->buffer[context->buffer_len] = '\0';
                 
                 yak_stream_message_t msg;
-                strncpy(msg.stream_name, evt->user_data, sizeof(msg.stream_name)-1);
-                msg.data = strdup(stream_buffer); // Allocate memory for the message data
+                strncpy(msg.stream_name, context->stream_name, sizeof(msg.stream_name)-1);
+                msg.data = strdup(context->buffer);
                 
                 if (msg.data) {
                     xQueueSend(stream_queue, &msg, 0);
                 }
                 
-                buffer_len = 0;
+                context->buffer_len = 0;
             }
             break;
             
         case HTTP_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "Stream disconnected");
-            buffer_len = 0;
+            context->buffer_len = 0;
             break;
         default:
             break;
