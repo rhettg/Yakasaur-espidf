@@ -399,6 +399,13 @@ void handle_command_event(yak_stream_message_t *msg)
     cJSON_Delete(root);
 }
 
+void telemetry_task(void *pvParameters) {
+    while(1) {
+        send_telemetry_stream();
+        vTaskDelay(pdMS_TO_TICKS(10000));  // Or whatever interval you want
+    }
+}
+
 void app_main()
 {
     telemetry_values.heading = 0;
@@ -412,19 +419,16 @@ void app_main()
     yak_api_init();
     
     // Create stream subscriptions
-    xTaskCreate(yak_api_subscription_task, "motor_a", 4096, "motor_a", 5, NULL);
-    xTaskCreate(yak_api_subscription_task, "motor_b", 4096, "motor_b", 5, NULL);
+    xTaskCreate(yak_api_subscription_task, "motor_a", 4096, "sfc-control:Q", 5, NULL);
+    xTaskCreate(yak_api_subscription_task, "motor_b", 4096, "sfc-control:K", 5, NULL);
+    xTaskCreate(telemetry_task, "telemetry", 4096, NULL, 5, NULL);
 
+    // Now main loop just handles commands
     while(1) {
         yak_stream_message_t msg;
         if (xQueueReceive(yak_api_get_queue(), &msg, pdMS_TO_TICKS(10000)) == pdTRUE) {
-            ESP_LOGI(TAG, "Received message from stream %s: %s", msg.stream_name, msg.data);
-
             handle_command_event(&msg);
-            
             free(msg.data);
         }
-        
-        send_telemetry_stream();
     }
 }
