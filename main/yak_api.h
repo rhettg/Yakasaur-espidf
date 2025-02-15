@@ -13,7 +13,7 @@ typedef struct {
 } yak_stream_message_t;
 
 // Public API
-esp_err_t yak_api_publish(const char *stream_name, cJSON *event);
+esp_err_t yak_api_publish(const char *stream_name, const char *content_type, const char *data, size_t data_len);
 esp_err_t yak_api_init(void);
 QueueHandle_t yak_api_get_queue(void);
 void yak_api_subscription_task(void *pvParameters);

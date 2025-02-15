@@ -6,29 +6,10 @@
 
 static const char *TAG = "YAK_API";
 
-// Simple ULID-like ID generator (not full ULID spec compliant)
-static void generate_id(char *id_buf) {
-    uint32_t timestamp = esp_random();
-    uint32_t random = esp_random();
-    sprintf(id_buf, "%08lx%08lx", timestamp, random);
-}
 
-esp_err_t yak_api_publish(const char *stream_name, cJSON *event) {
+esp_err_t yak_api_publish(const char *stream_name, const char *content_type, const char *data, size_t data_len) {
     char url[256];
-    char id[17];
     esp_err_t ret = ESP_OK;
-
-    // Add ID if not present
-    if (!cJSON_HasObjectItem(event, "id")) {
-        generate_id(id);
-        cJSON_AddStringToObject(event, "id", id);
-    }
-
-    // Convert event to string
-    char *post_data = cJSON_Print(event);
-    if (!post_data) {
-        return ESP_FAIL;
-    }
 
     // Construct URL
     snprintf(url, sizeof(url), "%s/v1/stream/%s", YAK_API_BASE_URL, stream_name);
@@ -41,12 +22,11 @@ esp_err_t yak_api_publish(const char *stream_name, cJSON *event) {
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
-        free(post_data);
         return ESP_FAIL;
     }
 
-    ESP_ERROR_CHECK(esp_http_client_set_header(client, "Content-Type", "application/json"));
-    esp_http_client_set_post_field(client, post_data, strlen(post_data));
+    ESP_ERROR_CHECK(esp_http_client_set_header(client, "Content-Type", content_type));
+    esp_http_client_set_post_field(client, data, data_len);
 
     // Perform request
     esp_err_t err = esp_http_client_perform(client);
@@ -57,10 +37,10 @@ esp_err_t yak_api_publish(const char *stream_name, cJSON *event) {
 
     // Cleanup
     esp_http_client_cleanup(client);
-    free(post_data);
 
     return ret;
 }
+
 
 static QueueHandle_t stream_queue;
 #define STREAM_QUEUE_SIZE 10

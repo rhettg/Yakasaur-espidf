@@ -193,7 +193,7 @@ void cmd_snap() {
 
     esp_camera_fb_return(fb);
 
-    esp_err_t err = send_image("camera1.jpg", base64_buffer);
+    esp_err_t err = send_image("camera_front", base64_buffer);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send image: %s", esp_err_to_name(err));
     }
@@ -357,7 +357,14 @@ void send_telemetry_stream(void) {
     cJSON_AddNumberToObject(root, "longitude", telemetry_values.longitude);
 
     // Publish to stream
-    esp_err_t err = yak_api_publish("telemetry", root);
+    char *json_str = cJSON_Print(root);
+    if (!json_str) {
+        ESP_LOGE(TAG, "Failed to print JSON");
+        cJSON_Delete(root);
+        return;
+    }
+
+    esp_err_t err = yak_api_publish("telemetry", "application/json", json_str, strlen(json_str));
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to publish telemetry: %s", esp_err_to_name(err));
     }
