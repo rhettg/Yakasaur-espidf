@@ -67,92 +67,8 @@ extern const char isrg_root_pem_end[]   asm("_binary_isrg_root_pem_end");
 static adc_cali_handle_t adc_cali_handle = NULL;
 static adc_oneshot_unit_handle_t adc_handle = NULL;
 
-void cmd_ping() {
-    ESP_LOGI(TAG, "PING");
-}
 
-esp_err_t send_image(const char *filename, char *base64_data) {
-    char api_url[100];
-    cJSON *root;
-    cJSON *body;
-
-	root = cJSON_CreateObject();
-    if (NULL == root) {
-        ESP_LOGE(TAG, "Failed to create JSON root");
-        return ESP_FAIL;
-    }
-
-    body = cJSON_AddObjectToObject(root, "body");
-    if (NULL == body) {
-        ESP_LOGE(TAG, "Failed to create JSON body");
-        cJSON_Delete(root);
-        return ESP_FAIL;
-    }
-
-    if (NULL == cJSON_AddStringToObject(body, "filename", filename)) {
-        ESP_LOGE(TAG, "Failed to add filename to JSON");
-        cJSON_Delete(root);
-        return ESP_FAIL;
-    }
-
-    if (NULL == cJSON_AddStringToObject(body, "data", base64_data)) {
-        ESP_LOGE(TAG, "Failed to add data to JSON");
-        return ESP_FAIL;
-    }
-
-    char *post_data = cJSON_Print(root);
-    if (NULL == post_data) {
-        ESP_LOGE(TAG, "Failed to serialize JSON");
-        cJSON_Delete(root);
-        return ESP_FAIL;
-    }
-
-    cJSON_Delete(root);
-
-    if (0 >= snprintf(api_url, 100, "%s/v1/missions/%s/notes/images.qo", YAK_GDS_URL, YAK_GDS_MISSION)) {
-        ESP_LOGE(TAG, "Failed to create API URL");
-        return ESP_FAIL;
-    }
-
-    esp_http_client_config_t config = {
-        .url = api_url,
-        .method = HTTP_METHOD_POST,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    ESP_ERROR_CHECK(esp_http_client_set_header(client, "Content-Type", "application/json"));
-
-    esp_http_client_set_post_field(client, post_data, strlen(post_data));
-
-    ESP_LOGI(TAG, "Sending image to %s. Size %d", api_url, strlen(post_data));
-
-    esp_err_t err = esp_http_client_perform(client);
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "HTTP POST request was successful");
-    } else {
-        ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
-        goto cleanupfail;
-    }
-
-    int status_code = esp_http_client_get_status_code(client);
-    if (status_code != 201) {
-        ESP_LOGE(TAG, "HTTP POST request returned status code %d", status_code);
-        goto cleanupfail;
-    }
-
-    esp_http_client_cleanup(client);
-    free(post_data);
-    return ESP_OK;
-
-cleanupfail:
-    esp_http_client_cleanup(client);
-    free(post_data);
-    return ESP_FAIL;
-}
-
-
-void cmd_snap() {
+void snap_picture() {
     ESP_LOGI(TAG, "SNAP");
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) {
@@ -193,12 +109,19 @@ void cmd_snap() {
 
     esp_camera_fb_return(fb);
 
-    esp_err_t err = send_image("camera_front", base64_buffer);
+    esp_err_t err = yak_api_publish("camera_front", "image/jpeg", base64_buffer, encoded_len);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send image: %s", esp_err_to_name(err));
     }
 
     free(base64_buffer);
+}
+
+void snap_picture_task(void *pvParameters) {
+    while(1) {
+        snap_picture();
+        vTaskDelay(pdMS_TO_TICKS(20000));
+    }
 }
 
 static void event_handler(void* arg, esp_event_base_t event_base,
@@ -441,6 +364,7 @@ void app_main()
     xTaskCreate(yak_api_subscription_task, "motor_a", 4096, "motor_a", 5, NULL);
     xTaskCreate(yak_api_subscription_task, "motor_b", 4096, "motor_b", 5, NULL);
     xTaskCreate(telemetry_task, "telemetry", 4096, NULL, 5, NULL);
+    xTaskCreate(snap_picture_task, "snap_picture", 4096, NULL, 5, NULL);
 
     // Now main loop just handles commands
     while(1) {

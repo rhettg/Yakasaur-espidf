@@ -5,4 +5,4 @@
 
 #define WIFI_SSID "SSID"
 #define WIFI_PASS "PASSWORD"
-#define YAK_GDS_URL "http://yakgds.io"
+#define YAK_API_BASE_URL "http://yak-api:8080"
