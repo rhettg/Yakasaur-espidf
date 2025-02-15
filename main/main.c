@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include <ctype.h>
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -366,37 +367,48 @@ void send_telemetry_stream(void) {
 
 void handle_command_event(yak_stream_message_t *msg) 
 {
-    // Check if stream name is valid
-    if (strcmp(msg->stream_name, "motor_a") != 0 && strcmp(msg->stream_name, "motor_b") != 0) {
-        ESP_LOGE(TAG, "Unknown stream %s", msg->stream_name);
+    // Check for null message or data
+    if (!msg || !msg->data) {
+        ESP_LOGE(TAG, "Received null message or data");
         return;
     }
 
-    cJSON* root = cJSON_Parse(msg->data);
-    if (root == NULL) {
-        ESP_LOGE(TAG, "Failed to parse command event");
+    // Validate string length
+    size_t len = strlen(msg->data);
+    if (len == 0 || len > 32) {
+        ESP_LOGE(TAG, "Invalid data length: %d", len);
         return;
     }
 
-    // Get the value from JSON
-    cJSON *power_obj = cJSON_GetObjectItem(root, "power");
-    if (cJSON_IsNumber(power_obj)) {
-        int power = power_obj->valueint;
-        ESP_LOGI(TAG, "Set %s to %d", msg->stream_name, power);
-        
-        // Here you can add motor control logic based on the stream and value
-        if (strcmp(msg->stream_name, "motor_a") == 0) {
-            motor_a_set_power(power);
-        } else if (strcmp(msg->stream_name, "motor_b") == 0) {
-            motor_b_set_power(power);
-        } else {
-            ESP_LOGW(TAG, "unexpected stream %s", msg->stream_name);
+    ESP_LOGI(TAG, "Received command: '%s' (len %d)", msg->data, len);
+
+    // Check for valid numeric string (only digits and optional minus sign)
+    for (size_t i = 0; i < len; i++) {
+        if (i == 0 && msg->data[i] == '-') continue;
+        if (!isdigit((unsigned char)msg->data[i])) {
+            ESP_LOGE(TAG, "Invalid character in data: %c", msg->data[i]);
+            return;
         }
-    } else {
-        ESP_LOGW(TAG, "not a number");
     }
 
-    cJSON_Delete(root);
+    // Convert string to integer
+    int power = atoi(msg->data);
+
+    // Bound check the power value
+    if (power < 0 || power > 1) {
+        ESP_LOGE(TAG, "Power value out of range: %d", power);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Set %s to %d", msg->stream_name, power);
+    
+    if (strcmp(msg->stream_name, "motor_a") == 0) {
+        motor_a_set_power(power);
+    } else if (strcmp(msg->stream_name, "motor_b") == 0) {
+        motor_b_set_power(power);
+    } else {
+        ESP_LOGW(TAG, "unexpected stream %s", msg->stream_name);
+    }
 }
 
 void telemetry_task(void *pvParameters) {
@@ -419,8 +431,8 @@ void app_main()
     yak_api_init();
     
     // Create stream subscriptions
-    xTaskCreate(yak_api_subscription_task, "motor_a", 4096, "sfc-control:Q", 5, NULL);
-    xTaskCreate(yak_api_subscription_task, "motor_b", 4096, "sfc-control:K", 5, NULL);
+    xTaskCreate(yak_api_subscription_task, "motor_a", 4096, "motor_a", 5, NULL);
+    xTaskCreate(yak_api_subscription_task, "motor_b", 4096, "motor_b", 5, NULL);
     xTaskCreate(telemetry_task, "telemetry", 4096, NULL, 5, NULL);
 
     // Now main loop just handles commands
