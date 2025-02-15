@@ -131,7 +131,8 @@ static esp_err_t stream_event_handler(esp_http_client_event_t *evt) {
             
             // Do we have a complete message, or should we wait until next time?
             if (evt->data_len > 0 && ((char *)evt->data)[evt->data_len-1] == '\n') {
-                context->buffer[context->buffer_len] = '\0';
+                // Drop the newline
+                context->buffer[context->buffer_len-1] = '\0';
                 
                 yak_stream_message_t msg;
                 strncpy(msg.stream_name, context->stream_name, sizeof(msg.stream_name)-1);
